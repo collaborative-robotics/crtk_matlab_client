@@ -35,9 +35,9 @@ classdef crtk_utils < handle
         setpoint_cf_subscriber;
     end
 
-    
+
     methods(Static)
-    
+
         function seconds = ros_time_to_secs(stamp)
             % Convert awkward rostime into a single double
             seconds = double(stamp.Sec) + double(stamp.Nsec) * 10^-9;
@@ -60,10 +60,10 @@ classdef crtk_utils < handle
            vector = [wrench.Force.X,  wrench.Force.Y,  wrench.Force.Z, ...
                      wrench.Torque.X, wrench.Torque.Y, wrench.Torque.Z];
         end
-        
+
     end % methods(Static)
-    
-    
+
+
     methods
 
         function self = crtk_utils(class_instance, namespace)
