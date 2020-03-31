@@ -86,13 +86,15 @@ classdef crtk_utils < handle
             end
         end
 
-        function [wrench, timestamp] = measured_cf(self)
+        function [cf, timestamp] = measured_cf(self)
             if isempty(self.measured_cf_subscriber.LatestMessage)
                 warning('measured_cf has not received messages yet (topic %s)',...
                         self.measured_cf_subscriber.TopicName);
+                cf = [];
+                timestamp = 0.0;    
                 return;
             end
-            wrench = self.ros_wrench_to_vector(self.measured_cf_subscriber.LatestMessage.Wrench);
+            cf = self.ros_wrench_to_vector(self.measured_cf_subscriber.LatestMessage.Wrench);
             timestamp = self.ros_time_to_secs(self.measured_cf_subscriber.LatestMessage.Header.Stamp);
         end
 

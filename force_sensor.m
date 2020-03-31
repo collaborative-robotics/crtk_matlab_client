@@ -1,7 +1,7 @@
 classdef force_sensor < dynamicprops
 
     % only this class methods can view/modify
-    properties (SetAccess = public)
+    properties (Access = protected)
         crtk_utils;
     end
 
