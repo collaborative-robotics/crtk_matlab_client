@@ -23,15 +23,15 @@ If you're cloning `crtk-msgs` by hand, you can use:
 ```sh
 cd ~/catkin_ws/src
 # clone in sub-directory crtk and rename to crtk_msgs
-git clone git clone https://github.com/collaborative-robotics/crtk-msgs crtk/crtk_msgs
+git clone https://github.com/collaborative-robotics/crtk-msgs crtk/crtk_msgs
 ```
 
 At that point, you can finally generate the code (running Matlab without `sudo`):
 ```matlab
-rosgenmsg(fullfile(userpath,'catkin_ws/src/crtk'))
+rosgenmsg('~/catkin_ws/src/crtk')
 ```
 
-Then follow instructions to edit `javaclasspath.txt` in `~/.matlab/R2020a`.  The tutorial recommends to use `savepath` but this would apply to all users on the workstation so you should probably skip that step and read the following section.
+Then follow instructions to edit `javaclasspath.txt` in `~/.matlab/R2020a` (step 1).  The tutorial recommends to use `savepath` (step 2) but this would apply to all users on the workstation so you should probably skip that step and read the following section.
 
 ### Paths
 
@@ -43,11 +43,11 @@ edit(fullfile(userpath,'startup.m'))
 In your `startup.m`, you can add the `addpath` commands that you want executed everytime your start Matlab:
 ```matlab
 % to locate crtk_msgs
-addpath(fullfile(userpath,'catkin_ws/src/crtk/matlab_gen/msggen'))
+addpath('~/catkin_ws/src/crtk/matlab_gen/msggen')
 % to locate crtk client
-addpath(fullfile(userpath,'catkin_ws/src/crtk-matlab-client'))
-% to locate dvrk code
-addpath(fullfile(userpath,'catkin_ws/src/dvrk-ros/dvrk_matlab'))
+addpath('~/catkin_ws/src/crtk-matlab-client')
+% to locate dvrk code - only for dVRK users
+addpath('~/catkin_ws/src/dvrk-ros/dvrk_matlab')
 ```
 
 Then quit Matlab, restart it and test using:
