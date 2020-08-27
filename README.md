@@ -59,6 +59,10 @@ rosmsg('show', 'crtk_msgs/operating_state')
 m = rosmessage('crtk_msgs/operating_state')
 ```
 
+### Very important debugging note
+
+Matlab seems to create a cache of existing messages that is not being refreshed automatically.  This is apparently populated when you first call `rosmsg` or `rosmessage`.  So if you forgot to set your path and then called `rosmsg` (which will fail to find your new message types), adding the path with `addpath` is not enough to locate the new message types since the list of available messages will **not** be refreshed.  At that point, it seems the only solution is to quit Matlab, restart Matlab and remember to set your paths **before** any call to `rosmsg` or `rosmessage`.  The Matlab command `rehash` doesn't seem to fix the issue.  The script `startup.m` can ensure that `addpath` is called before any ROS command.
+
 ## Usage
 
 The first step is to create a Matlab class with dynamic properties.  For example, let's assume we want to create a simple force sensor client:
