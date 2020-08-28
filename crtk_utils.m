@@ -22,6 +22,10 @@ classdef crtk_utils < handle
 
     % these should only be used by these class's methods
     properties (Access = private)
+        % operating state
+        operating_state_timer;
+        operating_state_subscriber;
+        move_is_waiting;
         % joint space
         measured_js_subscriber;
         setpoint_js_subscriber;
@@ -107,22 +111,91 @@ classdef crtk_utils < handle
             self.geometry_msgs_Transform = rosmessage(rostype.geometry_msgs_TransformStamped);
             self.geometry_msgs_Twist = rosmessage(rostype.geometry_msgs_TwistStamped);
             self.geometry_msgs_Wrench = rosmessage(rostype.geometry_msgs_WrenchStamped);
+            % operating state subscriber
+            self.operating_state_subscriber = ...
+                rossubscriber(self.ros_topic('operating_state'), 'crtk_msgs/operating_state');
+            self.operating_state_subscriber.NewMessageFcn = @self.operating_state_callback;
+            self.active_subscribers('operating_state') = self.operating_state_subscriber;
+            % timer used for operating state
+            self.operating_state_timer = timer('ExecutionMode', 'singleShot', ...
+                                               'Name', strcat(self.ros_namespace, '_operating_state'), ...
+                                               'ObjectVisibility', 'off', ...
+                                               'StartDelay', 300.0); % 5 minutes is long enough for any task
+            self.operating_state_timer.TimerFcn = { @self.operating_state_timeout };
+            % move command not issued
+            self.move_is_waiting = true;
         end
 
         function delete(self)
+            % members always created
+            delete(self.operating_state_timer);
+            delete(self.operating_state_subscriber);
+            % delete subscribers that might have been created
             for k = keys(self.active_subscribers)
                 subscriber = self.active_subscribers(k{1});
-                subscriber.NewMessageFcn = @(a, b, c)[];
-                subscriber.delete();
+                delete(subscriber);
             end
         end
 
+        function full_topic = ros_topic(self, topic)
+            if strcmp(self.ros_namespace, '')
+                full_topic = topic;
+                return;
+            end
+            if strcmp(self.ros_namespace(end), '/')
+                full_topic = strcat(self.ros_namespace, topic);
+                return;
+            end
+            full_topic = strcat(self.ros_namespace, '/', topic);
+        end
+
+        function check_input_is_frame(self, frame)
+            if ~isreal(frame)
+                error('%s: input must be an array or real numbers, not %s', self.ros_namespace, class(frame));
+            end
+            if ~ismatrix(frame)
+                error('%s: input must be a matrix', self.ros_namespace);
+            end
+            [nb_rows, nb_cols] = size(frame);
+            if (nb_rows ~= 4) || (nb_cols ~=4)
+                error('%s: input must be a 4x4 matrix, got %dx%d', self.ros_namespace, nb_rows, nb_cols);
+            end
+        end
+
+        function operating_state_timeout(self, ~, ~) % second parameter is timer, third is this function
+            fprintf('%s: timeout for operating state\n', self.ros_namespace);
+        end
+
+        function pre_move(self, timeout_s)
+            if (timeout_s > 0.0)
+                self.move_is_waiting = true;
+                start(self.operating_state_timer);
+            end
+        end
+
+        function post_move(self, timeout_s)
+            if timeout_s > 0.0
+                wait(self.operating_state_timer);
+            end
+        end
+
+        function operating_state_callback(self, ~, message)
+            if self.move_is_waiting
+                if ~strcmp(message.State, 'ENABLED') || ~message.IsBusy
+                    stop(self.operating_state_timer);
+                    self.move_is_waiting = false;
+                end
+            end
+            % fprintf('%s is in state %s\n', self.ros_namespace, message.State);
+        end
 
         function [jp, jv, jf, timestamp] = measured_js(self)
             if isempty(self.measured_js_subscriber.LatestMessage)
                 warning('measured_js has not received messages yet (topic %s)',...
                         self.measured_js_subscriber.TopicName);
-                js = [];
+                jp = [];
+                jv = [];
+                jf = [];
                 timestamp = 0.0;
                 return;
             end
@@ -133,12 +206,12 @@ classdef crtk_utils < handle
         end
 
         function add_measured_js(self)
-            topic = strcat(self.ros_namespace, 'measured_js');
+            cmd = 'measured_js';
             self.measured_js_subscriber = ...
-                rossubscriber(topic, rostype.sensor_msgs_JointState);
-            self.class_instance.addprop('measured_js');
+                rossubscriber(self.ros_topic(cmd), rostype.sensor_msgs_JointState);
+            self.class_instance.addprop(cmd);
             self.class_instance.measured_js = @self.measured_js;
-            self.active_subscribers('measured_js') = self.measured_js_subscriber;
+            self.active_subscribers(cmd) = self.measured_js_subscriber;
         end
 
 
@@ -146,7 +219,9 @@ classdef crtk_utils < handle
             if isempty(self.setpoint_js_subscriber.LatestMessage)
                 warning('setpoint_js has not received messages yet (topic %s)',...
                         self.setpoint_js_subscriber.TopicName);
-                js = [];
+                jp = [];
+                jv = [];
+                jf = [];
                 timestamp = 0.0;
                 return;
             end
@@ -157,12 +232,12 @@ classdef crtk_utils < handle
         end
 
         function add_setpoint_js(self)
-            topic = strcat(self.ros_namespace, 'setpoint_js');
+            cmd = 'setpoint_js';
             self.setpoint_js_subscriber = ...
-                rossubscriber(topic, rostype.sensor_msgs_JointState);
-            self.class_instance.addprop('setpoint_js');
+                rossubscriber(self.ros_topic(cmd), rostype.sensor_msgs_JointState);
+            self.class_instance.addprop(cmd);
             self.class_instance.setpoint_js = @self.setpoint_js;
-            self.active_subscribers('setpoint_js') = self.setpoint_js_subscriber;
+            self.active_subscribers(cmd) = self.setpoint_js_subscriber;
         end
 
 
@@ -172,10 +247,10 @@ classdef crtk_utils < handle
         end
 
         function add_servo_jp(self)
-            topic = strcat(self.ros_namespace, 'servo_jp');
+            cmd = 'servo_jp';
             self.servo_jp_publisher = ...
-                rospublisher(topic, rostype.sensor_msgs_JointState);
-            self.class_instance.addprop('servo_jp');
+                rospublisher(self.ros_topic(cmd), rostype.sensor_msgs_JointState);
+            self.class_instance.addprop(cmd);
             self.class_instance.servo_jp = @self.servo_jp;
         end
 
@@ -186,24 +261,34 @@ classdef crtk_utils < handle
         end
 
         function add_servo_jf(self)
-            topic = strcat(self.ros_namespace, 'servo_jf');
+            cmd = 'servo_jf';
             self.servo_jf_publisher = ...
-                rospublisher(topic, rostype.sensor_msgs_JointState);
-            self.class_instance.addprop('servo_jf');
+                rospublisher(self.ros_topic(cmd), rostype.sensor_msgs_JointState);
+            self.class_instance.addprop(cmd);
             self.class_instance.servo_jf = @self.servo_jf;
         end
 
 
-        function move_jp(self, jp)
+        function move_jp(self, jp, timeout_s)
+            % default based on number of arguments
+            if nargin == 2
+                timeout_s = 0.0;
+            else
+                if timeout_s < 0.0
+                    timeout_s = 30.0;
+                end
+            end
             self.sensor_msgs_JointState.Position = jp;
+            self.pre_move(timeout_s);
             send(self.move_jp_publisher, self.sensor_msgs_JointState);
+            self.post_move(timeout_s);
         end
 
         function add_move_jp(self)
-            topic = strcat(self.ros_namespace, 'move_jp');
+            cmd = 'move_jp';
             self.move_jp_publisher = ...
-                rospublisher(topic, rostype.sensor_msgs_JointState);
-            self.class_instance.addprop('move_jp');
+                rospublisher(self.ros_topic(cmd), rostype.sensor_msgs_JointState);
+            self.class_instance.addprop(cmd);
             self.class_instance.move_jp = @self.move_jp;
         end
 
@@ -221,12 +306,12 @@ classdef crtk_utils < handle
         end
 
         function add_measured_cp(self)
-            topic = strcat(self.ros_namespace, 'measured_cp');
+            cmd = 'measured_cp';
             self.measured_cp_subscriber = ...
-                rossubscriber(topic, rostype.geometry_msgs_TransformStamped);
-            self.class_instance.addprop('measured_cp');
+                rossubscriber(self.ros_topic(cmd), rostype.geometry_msgs_TransformStamped);
+            self.class_instance.addprop(cmd);
             self.class_instance.measured_cp = @self.measured_cp;
-            self.active_subscribers('measured_cp') = self.measured_cp_subscriber;
+            self.active_subscribers(cmd) = self.measured_cp_subscriber;
         end
 
 
@@ -243,12 +328,12 @@ classdef crtk_utils < handle
         end
 
         function add_measured_cv(self)
-            topic = strcat(self.ros_namespace, 'measured_cv');
+            cmd = 'measured_cv';
             self.measured_cv_subscriber = ...
-                rossubscriber(topic, rostype.geometry_msgs_TwistStamped);
-            self.class_instance.addprop('measured_cv');
+                rossubscriber(self.ros_topic(cmd), rostype.geometry_msgs_TwistStamped);
+            self.class_instance.addprop(cmd);
             self.class_instance.measured_cv = @self.measured_cv;
-            self.active_subscribers('measured_cv') = self.measured_cv_subscriber;
+            self.active_subscribers(cmd) = self.measured_cv_subscriber;
         end
 
 
@@ -265,12 +350,12 @@ classdef crtk_utils < handle
         end
 
         function add_body_measured_cf(self)
-            topic = strcat(self.ros_namespace, 'body/measured_cf');
+            cmd = 'body/measured_cf';
             self.body_measured_cf_subscriber = ...
-                rossubscriber(topic, rostype.geometry_msgs_WrenchStamped);
+                rossubscriber(self.ros_topic(cmd), rostype.geometry_msgs_WrenchStamped);
             self.class_instance.addprop('body_measured_cf');
             self.class_instance.body_measured_cf = @self.body_measured_cf;
-            self.active_subscribers('body/measured_cf') = self.body_measured_cf_subscriber;
+            self.active_subscribers(cmd) = self.body_measured_cf_subscriber;
         end
 
 
@@ -287,12 +372,12 @@ classdef crtk_utils < handle
         end
 
         function add_setpoint_cp(self)
-            topic = strcat(self.ros_namespace, 'setpoint_cp');
+            cmd = 'setpoint_cp';
             self.setpoint_cp_subscriber = ...
-                rossubscriber(topic, rostype.geometry_msgs_TransformStamped);
-            self.class_instance.addprop('setpoint_cp');
+                rossubscriber(self.ros_topic(cmd), rostype.geometry_msgs_TransformStamped);
+            self.class_instance.addprop(cmd);
             self.class_instance.setpoint_cp = @self.setpoint_cp;
-            self.active_subscribers('setpoint_cp') = self.setpoint_cp_subscriber;
+            self.active_subscribers(cmd) = self.setpoint_cp_subscriber;
         end
 
 
@@ -305,16 +390,16 @@ classdef crtk_utils < handle
                 return;
             end
             cv = self.ros_twist_to_vector(self.setpoint_cf_subscriber.LatestMessage.Twist);
-            timestamp = self.ros_time_to_secs(self.setpoint_cfv_subscriber.LatestMessage.Header.Stamp);
+            timestamp = self.ros_time_to_secs(self.setpoint_cv_subscriber.LatestMessage.Header.Stamp);
         end
 
         function add_setpoint_cv(self)
-            topic = strcat(self.ros_namespace, 'setpoint_cv');
+            cmd = 'setpoint_cv';
             self.setpoint_cv_subscriber = ...
-                rossubscriber(topic, rostype.geometry_msgs_Twist);
-            self.class_instance.addprop('setpoint_cv');
+                rossubscriber(self.ros_topic(cmd), rostype.geometry_msgs_Twist);
+            self.class_instance.addprop(cmd);
             self.class_instance.setpoint_cv = @self.setpoint_cv;
-            self.active_subscribers('setpoint_cv') = self.setpoint_cv_subscriber;
+            self.active_subscribers(cmd) = self.setpoint_cv_subscriber;
         end
 
 
@@ -331,12 +416,12 @@ classdef crtk_utils < handle
         end
 
         function add_setpoint_cf(self)
-            topic = strcat(self.ros_namespace, 'setpoint_cf');
+            cmd = 'setpoint_cf';
             self.setpoint_cf_subscriber = ...
-                rossubscriber(topic, rostype.geometry_msgs_Wrench);
-            self.class_instance.addprop('setpoint_cf');
+                rossubscriber(self.ros_topic(cmd), rostype.geometry_msgs_Wrench);
+            self.class_instance.addprop(cmd);
             self.class_instance.setpoint_cf = @self.setpoint_cf;
-            self.active_subscribers('setpoint_cf') = self.setpoint_cf_subscriber;
+            self.active_subscribers(cmd) = self.setpoint_cf_subscriber;
         end
 
 
@@ -346,10 +431,10 @@ classdef crtk_utils < handle
         end
 
         function add_servo_cp(self)
-            topic = strcat(self.ros_namespace, 'servo_cp');
+            cmd = 'servo_cp';
             self.servo_cp_publisher = ...
-                rospublisher(topic, rostype.geometry_msgs_TransformStamped);
-            self.class_instance.addprop('servo_cp');
+                rospublisher(self.ros_topic(cmd), rostype.geometry_msgs_TransformStamped);
+            self.class_instance.addprop(cmd);
             self.class_instance.servo_cp = @self.servo_cp;
         end
 
@@ -360,24 +445,35 @@ classdef crtk_utils < handle
         end
 
         function add_spatial_servo_cf(self)
-            topic = strcat(self.ros_namespace, 'spatial/servo_cf');
+            cmd = 'spatial/servo_cf';
             self.spatial_servo_cf_publisher = ...
-                rospublisher(topic, rostype.geometry_msgs_WrenchStamped);
+                rospublisher(self.ros_topic(cmd), rostype.geometry_msgs_WrenchStamped);
             self.class_instance.addprop('spatial_servo_cf');
             self.class_instance.spatial_servo_cf = @self.spatial_servo_cf;
         end
 
 
-        function move_cp(self, cp)
+        function move_cp(self, cp, timeout_s)
+            % default based on number of arguments
+            if nargin == 2
+                timeout_s = 0.0;
+            else
+                if timeout_s < 0.0
+                    timeout_s = 30.0;
+                end
+            end
+            self.check_input_is_frame(cp);
             self.frame_to_ros_transform(cp, self.geometry_msgs_Transform.Transform);
+            self.pre_move(timeout_s);
             send(self.move_cp_publisher, self.geometry_msgs_Transform);
+            self.post_move(timeout_s);
         end
 
         function add_move_cp(self)
-            topic = strcat(self.ros_namespace, 'move_cp');
+            cmd = 'move_cp';
             self.move_cp_publisher = ...
-                rospublisher(topic, rostype.geometry_msgs_TransformStamped);
-            self.class_instance.addprop('move_cp');
+                rospublisher(self.ros_topic(cmd), rostype.geometry_msgs_TransformStamped);
+            self.class_instance.addprop(cmd);
             self.class_instance.move_cp = @self.move_cp;
         end
 
