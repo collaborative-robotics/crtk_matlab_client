@@ -11,8 +11,8 @@ The following has been tested on Linux with Matlab 2020a.
 ## Custom messages and paths
 
 Matlab's handling of custom messages is working but a bit frustrating to use.  Please read carefuly the content of this section, this might save you some time.  Choose the instructions to follow based on the Matlab version you're using: 
-* Matlab up to 2020a: https://github.com/collaborative-robotics/crtk_matlab_client/blob/master/custom_msgs_up_to_2020a.md
-* Matlab 2020b and up: https://github.com/collaborative-robotics/crtk_matlab_client/blob/master/custom_msgs_2020b_and_up.md
+* [Matlab up to 2020a](./custom_msgs_up_to_2020a.md)
+* [Matlab 2020b and up](./custom_msgs_2020b_and_up.md)
 
 ## Usage
 
