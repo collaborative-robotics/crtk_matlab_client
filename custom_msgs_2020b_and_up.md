@@ -16,9 +16,9 @@ At that point, you can finally generate the code (running Matlab without `sudo`)
 rosgenmsg('~/catkin_ws/src/crtk')
 ```
 
-If you're running into a message re. _cmake_ not being found, see fix below.
+If you're running into an error re. **_cmake_ not being found**, see fix below and then come back to this section.
 
-Then follow instructions to edit `javaclasspath.txt` in `~/.matlab/R2020b` (step 1).  The tutorial recommends to use `savepath` (step 2) but this would apply to all users on the workstation so you should probably skip that step and read the following section.
+Then follow instructions to use `savepath` but this would apply to all users on the workstation so you should probably skip that step and read the following section.
 
 # Paths
 
