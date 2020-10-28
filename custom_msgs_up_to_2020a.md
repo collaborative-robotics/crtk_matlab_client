@@ -3,7 +3,7 @@
 Off the box, Matlab only supports ROS standard messages and can't handle custom messages.  There is an add-on available from Matlab to generate code (mix of Java and Matlab) to handle custom messages.  The process is not fully automated and requires a one-time generation and configuration of your Matlab environment.  
 
 You can use the Matlab command `rosAddons` to install `rosgenmsg` (see https://www.mathworks.com/help/ros/ug/create-custom-messages-from-ros-package.html).
-For this step, make sure you run Matlab as "super user": `sudo matlab`.  This is the only time you should run Matlab with `sudo`.
+For this step, make sure you run Matlab as "super user": `sudo matlab`.  This is the only time you should run Matlab with `sudo`.  Successive users should all install the add-on without `sudo`.
 
 To note, `rosgenmsg` has one rather annoying limitation, it expects a directory that contains directories of ROS packages.   So if you clone `crtk_msgs` in `catkin_ws/src` you will need to use `rosgenmsg` on all packages in `catkin_ws/src`.  To avoid this, you need to create a sub-directory in `catkin_ws/src` and then clone `crtk_msgs` in said sub-directory (for example `~/catkin_ws/src/crtk/crtk_msgs`).
 
