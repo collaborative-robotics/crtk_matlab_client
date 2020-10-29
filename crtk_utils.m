@@ -13,7 +13,7 @@ classdef crtk_utils < handle
         % ros messages instances to avoid runtime dynamic creation
         % these must be created in the constructor for crtk_utils
         std_msgs_Bool;
-        std_msgs_String;
+        std_msgs_StringStamped;
         sensor_msgs_JointState;
         geometry_msgs_Transform;
         geometry_msgs_Twist;
@@ -25,7 +25,9 @@ classdef crtk_utils < handle
         % operating state
         operating_state_timer;
         operating_state_subscriber;
-        move_is_waiting;
+        state_command_publisher;
+        operating_state_data;
+        operating_state_data_previous;
         % joint space
         measured_js_subscriber;
         setpoint_js_subscriber;
@@ -104,26 +106,14 @@ classdef crtk_utils < handle
         function self = crtk_utils(class_instance, namespace)
             self.class_instance = class_instance;
             self.ros_namespace = namespace;
+            self.operating_state_data = rosmessage('crtk_msgs/operating_state');
             % one time creation of messages to prevent lookup and creation at each call
             self.std_msgs_Bool = rosmessage(rostype.std_msgs_Bool);
-            self.std_msgs_String = rosmessage(rostype.std_msgs_String);
+            self.std_msgs_StringStamped = rosmessage('crtk_msgs/StringStamped');
             self.sensor_msgs_JointState = rosmessage(rostype.sensor_msgs_JointState);
             self.geometry_msgs_Transform = rosmessage(rostype.geometry_msgs_TransformStamped);
             self.geometry_msgs_Twist = rosmessage(rostype.geometry_msgs_TwistStamped);
             self.geometry_msgs_Wrench = rosmessage(rostype.geometry_msgs_WrenchStamped);
-            % operating state subscriber
-            self.operating_state_subscriber = ...
-                rossubscriber(self.ros_topic('operating_state'), 'crtk_msgs/operating_state');
-            self.operating_state_subscriber.NewMessageFcn = @self.operating_state_callback;
-            self.active_subscribers('operating_state') = self.operating_state_subscriber;
-            % timer used for operating state
-            self.operating_state_timer = timer('ExecutionMode', 'singleShot', ...
-                                               'Name', strcat(self.ros_namespace, '_operating_state'), ...
-                                               'ObjectVisibility', 'off', ...
-                                               'StartDelay', 300.0); % 5 minutes is long enough for any task
-            self.operating_state_timer.TimerFcn = { @self.operating_state_timeout };
-            % move command not issued
-            self.move_is_waiting = true;
         end
 
         function delete(self)
@@ -162,32 +152,72 @@ classdef crtk_utils < handle
             end
         end
 
+
         function operating_state_timeout(self, ~, ~) % second parameter is timer, third is this function
             fprintf('%s: timeout for operating state\n', self.ros_namespace);
         end
 
-        function pre_move(self, timeout_s)
-            if (timeout_s > 0.0)
-                self.move_is_waiting = true;
-                start(self.operating_state_timer);
-            end
+        function operating_state_callback(self, ~, ~)
+            self.operating_state_data_previous = self.operating_state_data;
+            self.operating_state_data = self.operating_state_subscriber.LatestMessage;
+            stop(self.operating_state_timer);
         end
 
-        function post_move(self, timeout_s)
-            if timeout_s > 0.0
+        function [state] = operating_state(self)
+            state = self.operating_state_subscriber.LatestMessage;
+        end
+
+        function state_command(self, state)
+            self.std_msgs_StringStamped.String = state;
+            send(self.state_command_publisher, self.std_msgs_StringStamped);
+        end
+
+        function [busy] = is_busy(self)
+            busy = self.operating_state_data.IsBusy;
+        end
+        
+        function [result] = wait_while_busy(self, start_time)
+            % make sure event has not arrived yet
+            if (self.operating_state_subscriber.LatestMessage.Header.Stamp > start_time)...
+                && ~self.operating_state_data.LatestMessage.IsBusy
+               result = true;
+               return
+            end
+            % now wait for an operating state event
+            while self.operating_state_subscriber.LatestMessage.IsBusy
+                start(self.operating_state_timer);
                 wait(self.operating_state_timer);
             end
+            result = true;
         end
 
-        function operating_state_callback(self, ~, message)
-            if self.move_is_waiting
-                if ~strcmp(message.State, 'ENABLED') || ~message.IsBusy
-                    stop(self.operating_state_timer);
-                    self.move_is_waiting = false;
-                end
-            end
-            % fprintf('%s is in state %s\n', self.ros_namespace, message.State);
+        function add_operating_state(self)
+            % operating state subscriber
+            self.operating_state_subscriber = ...
+                rossubscriber(self.ros_topic('operating_state'), 'crtk_msgs/operating_state');
+            self.operating_state_subscriber.NewMessageFcn = @self.operating_state_callback;
+            self.active_subscribers('operating_state') = self.operating_state_subscriber;
+            % accessors
+            self.class_instance.addprop('operating_state');
+            self.class_instance.operating_state = @self.operating_state;
+            self.class_instance.addprop('is_busy');
+            self.class_instance.is_busy = @self.is_busy;
+            % operating state publisher
+            cmd = 'state_command';
+            self.state_command_publisher = ...
+                rospublisher(self.ros_topic(cmd), 'crtk_msgs/StringStamped');
+            self.class_instance.addprop(cmd);
+            self.class_instance.state_command = @self.state_command;
+            % timer used for operating state
+            self.operating_state_timer = timer('ExecutionMode', 'singleShot', ...
+                                               'Name', strcat(self.ros_namespace, '_operating_state'), ...
+                                               'ObjectVisibility', 'off', ...
+                                               'StartDelay', 300.0); % 5 minutes is long enough for any task
+            self.operating_state_timer.TimerFcn = { @self.operating_state_timeout };
+            self.class_instance.addprop('wait_while_busy');
+            self.class_instance.wait_while_busy = @self.wait_while_busy;
         end
+
 
         function [jp, jv, jf, timestamp] = measured_js(self)
             if isempty(self.measured_js_subscriber.LatestMessage)
@@ -269,19 +299,10 @@ classdef crtk_utils < handle
         end
 
 
-        function move_jp(self, jp, timeout_s)
-            % default based on number of arguments
-            if nargin == 2
-                timeout_s = 0.0;
-            else
-                if timeout_s < 0.0
-                    timeout_s = 30.0;
-                end
-            end
+        function [time] = move_jp(self, jp)
             self.sensor_msgs_JointState.Position = jp;
-            self.pre_move(timeout_s);
+            time = rostime('now');
             send(self.move_jp_publisher, self.sensor_msgs_JointState);
-            self.post_move(timeout_s);
         end
 
         function add_move_jp(self)
@@ -453,20 +474,11 @@ classdef crtk_utils < handle
         end
 
 
-        function move_cp(self, cp, timeout_s)
-            % default based on number of arguments
-            if nargin == 2
-                timeout_s = 0.0;
-            else
-                if timeout_s < 0.0
-                    timeout_s = 30.0;
-                end
-            end
+        function [time] = move_cp(self, cp)
             self.check_input_is_frame(cp);
             self.frame_to_ros_transform(cp, self.geometry_msgs_Transform.Transform);
-            self.pre_move(timeout_s);
+            time = rostime('now');
             send(self.move_cp_publisher, self.geometry_msgs_Transform);
-            self.post_move(timeout_s);
         end
 
         function add_move_cp(self)
