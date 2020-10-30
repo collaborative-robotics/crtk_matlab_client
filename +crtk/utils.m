@@ -1,4 +1,4 @@
-classdef crtk_utils < handle
+classdef utils < handle
 
     % settings that are not supposed to change after constructor
     properties (SetAccess = immutable)
@@ -11,7 +11,7 @@ classdef crtk_utils < handle
         % map of active subscribers, used to stop all active subscribers
         active_subscribers = containers.Map();
         % ros messages instances to avoid runtime dynamic creation
-        % these must be created in the constructor for crtk_utils
+        % these must be created in the constructor for crtk.utils
         std_msgs_Bool;
         std_msgs_StringStamped;
         sensor_msgs_JointState;
@@ -103,7 +103,7 @@ classdef crtk_utils < handle
 
     methods
 
-        function self = crtk_utils(class_instance, namespace)
+        function self = utils(class_instance, namespace)
             self.class_instance = class_instance;
             self.ros_namespace = namespace;
             self.operating_state_data = rosmessage('crtk_msgs/operating_state');
@@ -117,14 +117,14 @@ classdef crtk_utils < handle
         end
 
         function delete(self)
-            % members always created
-            delete(self.operating_state_timer);
-            delete(self.operating_state_subscriber);
             % delete subscribers that might have been created
             for k = keys(self.active_subscribers)
                 subscriber = self.active_subscribers(k{1});
                 delete(subscriber);
             end
+            % members always created
+            delete(self.operating_state_subscriber); % delete subscriber first, its callback uses the timer below
+            delete(self.operating_state_timer);
         end
 
         function full_topic = ros_topic(self, topic)
@@ -152,11 +152,9 @@ classdef crtk_utils < handle
             end
         end
 
-
-        function operating_state_timeout(self, ~, ~) % second parameter is timer, third is this function
-            fprintf('%s: timeout for operating state\n', self.ros_namespace);
+        function operating_state_timeout(~, ~, ~) % first parameter is self, second is timer, third is this function
         end
-
+        
         function operating_state_callback(self, ~, ~)
             self.operating_state_data_previous = self.operating_state_data;
             self.operating_state_data = self.operating_state_subscriber.LatestMessage;
@@ -166,20 +164,76 @@ classdef crtk_utils < handle
         function [state] = operating_state(self)
             state = self.operating_state_subscriber.LatestMessage;
         end
+        
+        function [result] = wait_for_operating_state(self, expected_state, timeout)
+            % now wait for an operating state event
+            time_left = timeout;
+            tic;
+            time_end = toc + timeout;
+            while ~strcmp(self.operating_state_subscriber.LatestMessage.State, expected_state)...
+                  && time_left > 0.0
+                self.operating_state_timer.StartDelay = time_left;
+                start(self.operating_state_timer);
+                wait(self.operating_state_timer);
+                % round is to avoid sub millisecond warning when setting
+                % timer
+                time_left = round(1000.0 * (time_end - toc)) / 1000.0;
+            end
+            % true if ended with some time left
+            result = (time_left > 0.0);
+        end
 
         function state_command(self, state)
             self.std_msgs_StringStamped.String = state;
             send(self.state_command_publisher, self.std_msgs_StringStamped);
         end
 
+        function [result] = enable(self, timeout)
+            if nargin == 1
+                timeout = 0.0;
+            end
+            self.state_command('enable');
+            if timeout ~= 0.0
+                result = self.wait_for_operating_state('ENABLED', timeout);
+            end
+        end
+        
+        function [result] = wait_for_homed(self, expected_home, timeout)
+            % now wait for an operating state event
+            time_left = timeout;
+            tic;
+            time_end = toc + timeout;
+            while self.operating_state_subscriber.LatestMessage.IsHomed ~= expected_home...
+                  && time_left > 0.0
+                self.operating_state_timer.StartDelay = time_left;
+                start(self.operating_state_timer);
+                wait(self.operating_state_timer);
+                % round is to avoid sub millisecond warning when setting
+                % timer
+                time_left = round(1000.0 * (time_end - toc)) / 1000.0;
+            end
+            % true if ended with some time left
+            result = (time_left > 0.0);
+        end
+
+        function [result] = home(self, timeout)
+            if nargin == 1
+                timeout = 0.0;
+            end
+            self.state_command('home');
+            if timeout ~= 0.0
+                result = self.wait_for_homed(true, timeout);
+            end
+        end
+
         function [busy] = is_busy(self)
             busy = self.operating_state_data.IsBusy;
         end
-        
+
         function [result] = wait_while_busy(self, start_time)
             % make sure event has not arrived yet
             if (self.operating_state_subscriber.LatestMessage.Header.Stamp > start_time)...
-                && ~self.operating_state_data.LatestMessage.IsBusy
+                && ~(self.operating_state_subscriber.LatestMessage.IsBusy)
                result = true;
                return
             end
@@ -208,12 +262,16 @@ classdef crtk_utils < handle
                 rospublisher(self.ros_topic(cmd), 'crtk_msgs/StringStamped');
             self.class_instance.addprop(cmd);
             self.class_instance.state_command = @self.state_command;
+            self.class_instance.addprop('enable');
+            self.class_instance.enable = @self.enable;
+            self.class_instance.addprop('home');
+            self.class_instance.home = @self.home;
+ 
             % timer used for operating state
             self.operating_state_timer = timer('ExecutionMode', 'singleShot', ...
                                                'Name', strcat(self.ros_namespace, '_operating_state'), ...
                                                'ObjectVisibility', 'off', ...
-                                               'StartDelay', 300.0); % 5 minutes is long enough for any task
-            self.operating_state_timer.TimerFcn = { @self.operating_state_timeout };
+                                               'TimerFcn', @self.operating_state_timeout);
             self.class_instance.addprop('wait_while_busy');
             self.class_instance.wait_while_busy = @self.wait_while_busy;
         end
