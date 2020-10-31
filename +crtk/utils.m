@@ -37,12 +37,12 @@ classdef utils < handle
         % cartesian space
         measured_cp_subscriber;
         measured_cv_subscriber;
-        body_measured_cf_subscriber;
+        measured_cf_subscriber;
         setpoint_cp_subscriber;
         setpoint_cv_subscriber;
         setpoint_cf_subscriber;
         servo_cp_publisher;
-        spatial_servo_cf_publisher;
+        servo_cf_publisher;
         move_cp_publisher;
     end
 
@@ -55,31 +55,33 @@ classdef utils < handle
         end
 
         function frame = ros_pose_to_frame(pose)
-            % convert idiotic ROS message type to homogeneous transforms
+            % convert ROS message type to homogeneous transforms
             position = trvec2tform([pose.Position.X, pose.Position.Y, pose.Position.Z]);
             orientation = quat2tform([pose.Orientation.W, pose.Orientation.X, pose.Orientation.Y, pose.Orientation.Z]);
             frame = position * orientation;
         end
 
         function frame = ros_transform_to_frame(frame)
-            % convert idiotic ROS message type to homogeneous transforms
+            % convert ROS message type to homogeneous transforms
             position = trvec2tform([frame.Translation.X, frame.Translation.Y, frame.Translation.Z]);
             orientation = quat2tform([frame.Rotation.W, frame.Rotation.X, frame.Rotation.Y, frame.Rotation.Z]);
             frame = position * orientation;
         end
 
         function vector = ros_twist_to_vector(twist)
+            % convert ROS message type to a single vector
             vector = [twist.Linear.X,  twist.Linear.Y,  twist.Linear.Z, ...
                       twist.Angular.X, twist.Angular.Y, twist.Angular.Z];
         end
 
         function vector = ros_wrench_to_vector(wrench)
-            % convert idiotic ROS message type to a single vector
+            % convert ROS message type to a single vector
             vector = [wrench.Force.X,  wrench.Force.Y,  wrench.Force.Z, ...
                       wrench.Torque.X, wrench.Torque.Y, wrench.Torque.Z];
         end
 
         function frame_to_ros_transform(frame, transform)
+            % convert 4x4 homogeneous matrix to ROS transform
             transform.Translation.X = frame(1, 4);
             transform.Translation.Y = frame(2, 4);
             transform.Translation.Z = frame(3, 4);
@@ -91,6 +93,7 @@ classdef utils < handle
         end
 
         function vector_to_ros_wrench(vector, wrench)
+            % convert vector of 6 elements to ROS wrench
             wrench.Force.X = vector(1);
             wrench.Force.Y = vector(2);
             wrench.Force.Z = vector(3);
@@ -128,6 +131,7 @@ classdef utils < handle
         end
 
         function full_topic = ros_topic(self, topic)
+            % add trailing '/' to namespace if needed
             if strcmp(self.ros_namespace, '')
                 full_topic = topic;
                 return;
@@ -140,6 +144,9 @@ classdef utils < handle
         end
 
         function check_input_is_frame(self, frame)
+            % verify that the input looks like a frame, i.e. homogeneous
+            % matrix (4x4 matrix of real numbers).  This doesn't check if
+            % the last row is [0 0 0 1].
             if ~isreal(frame)
                 error('%s: input must be an array or real numbers, not %s', self.ros_namespace, class(frame));
             end
@@ -166,7 +173,8 @@ classdef utils < handle
         end
         
         function [result] = wait_for_operating_state(self, expected_state, timeout)
-            % now wait for an operating state event
+            % wait for an operating state event and make sure the new
+            % state is equal to the expected one
             time_left = timeout;
             tic;
             time_end = toc + timeout;
@@ -184,11 +192,15 @@ classdef utils < handle
         end
 
         function state_command(self, state)
+            % send a state command, this method doesn't check if the
+            % command is valid
             self.std_msgs_StringStamped.String = state;
             send(self.state_command_publisher, self.std_msgs_StringStamped);
         end
 
         function [result] = enable(self, timeout)
+            % send the state command 'enable' and wait until the operating
+            % state is 'ENABLED'
             if nargin == 1
                 timeout = 0.0;
             end
@@ -199,7 +211,8 @@ classdef utils < handle
         end
         
         function [result] = wait_for_homed(self, expected_home, timeout)
-            % now wait for an operating state event
+            % wait for an operating state event and make sure the member
+            % IsHomed is equal to expected_home
             time_left = timeout;
             tic;
             time_end = toc + timeout;
@@ -217,6 +230,7 @@ classdef utils < handle
         end
 
         function [result] = home(self, timeout)
+            % send the state command 'home' and wait until IsHomed is true
             if nargin == 1
                 timeout = 0.0;
             end
@@ -227,6 +241,7 @@ classdef utils < handle
         end
 
         function [busy] = is_busy(self)
+            % last operating state IsBusy
             busy = self.operating_state_data.IsBusy;
         end
 
@@ -416,25 +431,25 @@ classdef utils < handle
         end
 
 
-        function [cf, timestamp] = body_measured_cf(self)
-            if isempty(self.body_measured_cf_subscriber.LatestMessage)
-                warning('body/measured_cf has not received messages yet (topic %s)',...
-                        self.body_measured_cf_subscriber.TopicName);
+        function [cf, timestamp] = measured_cf(self)
+            if isempty(self.measured_cf_subscriber.LatestMessage)
+                warning('measured_cf has not received messages yet (topic %s)',...
+                        self.measured_cf_subscriber.TopicName);
                 cf = [];
                 timestamp = 0.0;
                 return;
             end
-            cf = self.ros_wrench_to_vector(self.body_measured_cf_subscriber.LatestMessage.Wrench);
-            timestamp = self.ros_time_to_secs(self.body_measured_cf_subscriber.LatestMessage.Header.Stamp);
+            cf = self.ros_wrench_to_vector(self.measured_cf_subscriber.LatestMessage.Wrench);
+            timestamp = self.ros_time_to_secs(self.measured_cf_subscriber.LatestMessage.Header.Stamp);
         end
 
-        function add_body_measured_cf(self)
-            cmd = 'body/measured_cf';
-            self.body_measured_cf_subscriber = ...
+        function add_measured_cf(self)
+            cmd = 'measured_cf';
+            self.measured_cf_subscriber = ...
                 rossubscriber(self.ros_topic(cmd), rostype.geometry_msgs_WrenchStamped);
-            self.class_instance.addprop('body_measured_cf');
-            self.class_instance.body_measured_cf = @self.body_measured_cf;
-            self.active_subscribers(cmd) = self.body_measured_cf_subscriber;
+            self.class_instance.addprop('measured_cf');
+            self.class_instance.measured_cf = @self.measured_cf;
+            self.active_subscribers(cmd) = self.measured_cf_subscriber;
         end
 
 
@@ -518,17 +533,17 @@ classdef utils < handle
         end
 
 
-        function spatial_servo_cf(self, cf)
+        function servo_cf(self, cf)
             self.vector_to_ros_wrench(cf, self.geometry_msgs_Wrench.Wrench);
-            send(self.spatial_servo_cf_publisher, self.geometry_msgs_Wrench);
+            send(self.servo_cf_publisher, self.geometry_msgs_Wrench);
         end
 
-        function add_spatial_servo_cf(self)
-            cmd = 'spatial/servo_cf';
-            self.spatial_servo_cf_publisher = ...
+        function add_servo_cf(self)
+            cmd = 'servo_cf';
+            self.servo_cf_publisher = ...
                 rospublisher(self.ros_topic(cmd), rostype.geometry_msgs_WrenchStamped);
-            self.class_instance.addprop('spatial_servo_cf');
-            self.class_instance.spatial_servo_cf = @self.spatial_servo_cf;
+            self.class_instance.addprop('servo_cf');
+            self.class_instance.servo_cf = @self.servo_cf;
         end
 
 
