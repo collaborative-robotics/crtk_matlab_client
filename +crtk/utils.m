@@ -161,7 +161,7 @@ classdef utils < handle
 
         function operating_state_timeout(~, ~, ~) % first parameter is self, second is timer, third is this function
         end
-        
+
         function operating_state_callback(self, ~, ~)
             self.operating_state_data_previous = self.operating_state_data;
             self.operating_state_data = self.operating_state_subscriber.LatestMessage;
@@ -171,7 +171,7 @@ classdef utils < handle
         function [state] = operating_state(self)
             state = self.operating_state_subscriber.LatestMessage;
         end
-        
+
         function [result] = wait_for_operating_state(self, expected_state, timeout)
             % wait for an operating state event and make sure the new
             % state is equal to the expected one
@@ -209,7 +209,19 @@ classdef utils < handle
                 result = self.wait_for_operating_state('ENABLED', timeout);
             end
         end
-        
+
+        function [result] = disable(self, timeout)
+            % send the state command 'disable' and wait until the operating
+            % state is 'DISABLED'
+            if nargin == 1
+                timeout = 0.0;
+            end
+            self.state_command('disable');
+            if timeout ~= 0.0
+                result = self.wait_for_operating_state('DISABLED', timeout);
+            end
+        end
+
         function [result] = wait_for_homed(self, expected_home, timeout)
             % wait for an operating state event and make sure the member
             % IsHomed is equal to expected_home
@@ -279,9 +291,11 @@ classdef utils < handle
             self.class_instance.state_command = @self.state_command;
             self.class_instance.addprop('enable');
             self.class_instance.enable = @self.enable;
+            self.class_instance.addprop('disable');
+            self.class_instance.disable = @self.disable;
             self.class_instance.addprop('home');
             self.class_instance.home = @self.home;
- 
+
             % timer used for operating state
             self.operating_state_timer = timer('ExecutionMode', 'singleShot', ...
                                                'Name', strcat(self.ros_namespace, '_operating_state'), ...
