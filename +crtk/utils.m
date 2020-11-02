@@ -32,8 +32,10 @@ classdef utils < handle
         measured_js_subscriber;
         setpoint_js_subscriber;
         servo_jp_publisher;
+        servo_jr_publisher;
         servo_jf_publisher;
         move_jp_publisher;
+        move_jr_publisher;
         % cartesian space
         measured_cp_subscriber;
         measured_cv_subscriber;
@@ -372,6 +374,20 @@ classdef utils < handle
         end
 
 
+        function servo_jr(self, jp)
+            self.sensor_msgs_JointState.Position = jp;
+            send(self.servo_jr_publisher, self.sensor_msgs_JointState);
+        end
+
+        function add_servo_jr(self)
+            cmd = 'servo_jr';
+            self.servo_jr_publisher = ...
+                rospublisher(self.ros_topic(cmd), rostype.sensor_msgs_JointState);
+            self.class_instance.addprop(cmd);
+            self.class_instance.servo_jr = @self.servo_jr;
+        end
+
+
         function servo_jf(self, jf)
             self.sensor_msgs_JointState.Effort = jf;
             send(self.servo_jf_publisher, self.sensor_msgs_JointState);
@@ -398,6 +414,21 @@ classdef utils < handle
                 rospublisher(self.ros_topic(cmd), rostype.sensor_msgs_JointState);
             self.class_instance.addprop(cmd);
             self.class_instance.move_jp = @self.move_jp;
+        end
+
+
+        function [time] = move_jr(self, jp)
+            self.sensor_msgs_JointState.Position = jp;
+            time = rostime('now');
+            send(self.move_jr_publisher, self.sensor_msgs_JointState);
+        end
+
+        function add_move_jr(self)
+            cmd = 'move_jr';
+            self.move_jr_publisher = ...
+                rospublisher(self.ros_topic(cmd), rostype.sensor_msgs_JointState);
+            self.class_instance.addprop(cmd);
+            self.class_instance.move_jr = @self.move_jr;
         end
 
 
