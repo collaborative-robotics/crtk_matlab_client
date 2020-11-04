@@ -30,7 +30,7 @@ Then in the constructor, create an instance of `crtk_utils` and add the CRTK fea
 ```matlab
    methods
         function self = force_sensor(ros_namespace)
-            self.crtk_utils = crtk_utils(self, ros_namespace);
+            self.crtk_utils = crtk.utils(self, ros_namespace);
             self.crtk_utils.add_measured_cf();
         end
     end
