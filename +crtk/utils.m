@@ -4,6 +4,7 @@ classdef utils < handle
     properties (SetAccess = immutable)
         ros_namespace; % namespace for this arm, should contain head/tail / (default is empty)
         class_instance;
+        operating_state_instance;
     end
 
     % so derived class can extend this
@@ -108,7 +109,13 @@ classdef utils < handle
 
     methods
 
-        function self = utils(class_instance, namespace)
+        function self = utils(class_instance, namespace, operating_state_instance)
+            narginchk(2, 3)
+            if nargin == 3
+                self.operating_state_instance = operating_state_instance;
+            else
+                self.operating_state_instance = class_instance;
+            end
             self.class_instance = class_instance;
             self.ros_namespace = namespace;
             self.operating_state_data = rosmessage('crtk_msgs/operating_state');
@@ -259,15 +266,15 @@ classdef utils < handle
             busy = self.operating_state_data.IsBusy;
         end
 
-        function [result] = wait_while_busy(self, start_time)
+        function [result] = wait_for_busy(self, is_busy, start_time)
             % make sure event has not arrived yet
             if (self.operating_state_subscriber.LatestMessage.Header.Stamp > start_time)...
-                && ~(self.operating_state_subscriber.LatestMessage.IsBusy)
+                && (self.operating_state_subscriber.LatestMessage.IsBusy == is_busy)
                result = true;
                return
             end
             % now wait for an operating state event
-            while self.operating_state_subscriber.LatestMessage.IsBusy
+            while ~(self.operating_state_subscriber.LatestMessage.IsBusy == is_busy)
                 start(self.operating_state_timer);
                 wait(self.operating_state_timer);
             end
@@ -303,8 +310,8 @@ classdef utils < handle
                                                'Name', strcat(self.ros_namespace, '_operating_state'), ...
                                                'ObjectVisibility', 'off', ...
                                                'TimerFcn', @self.operating_state_timeout);
-            self.class_instance.addprop('wait_while_busy');
-            self.class_instance.wait_while_busy = @self.wait_while_busy;
+            self.class_instance.addprop('wait_for_busy');
+            self.class_instance.wait_for_busy = @self.wait_for_busy;
         end
 
 
@@ -402,9 +409,9 @@ classdef utils < handle
         end
 
 
-        function [time] = move_jp(self, jp)
+        function [move_handle] = move_jp(self, jp)
             self.sensor_msgs_JointState.Position = jp;
-            time = rostime('now');
+            move_handle = crtk.wait_move_handle(self.operating_state_instance);
             send(self.move_jp_publisher, self.sensor_msgs_JointState);
         end
 
@@ -417,9 +424,9 @@ classdef utils < handle
         end
 
 
-        function [time] = move_jr(self, jp)
+        function [move_handle] = move_jr(self, jp)
             self.sensor_msgs_JointState.Position = jp;
-            time = rostime('now');
+            move_handle = crtk.wait_move_handle(self.operating_state_instance);
             send(self.move_jr_publisher, self.sensor_msgs_JointState);
         end
 
@@ -592,10 +599,10 @@ classdef utils < handle
         end
 
 
-        function [time] = move_cp(self, cp)
+        function [move_handle] = move_cp(self, cp)
             self.check_input_is_frame(cp);
             self.frame_to_ros_transform(cp, self.geometry_msgs_Transform.Transform);
-            time = rostime('now');
+            move_handle = crtk.wait_move_handle(self.operating_state_instance);
             send(self.move_cp_publisher, self.geometry_msgs_Transform);
         end
 
