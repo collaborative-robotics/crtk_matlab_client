@@ -1,5 +1,10 @@
 classdef utils < handle
 
+    % Author(s): Anton Deguet
+    %
+    % Copyright (c) 2019-2021 Johns Hopkins University, University of Washington, Worcester Polytechnic Institute
+    % Released under MIT License
+
     % settings that are not supposed to change after constructor
     properties (SetAccess = immutable)
         ros_namespace; % namespace for this arm, should contain head/tail / (default is empty)

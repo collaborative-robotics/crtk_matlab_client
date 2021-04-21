@@ -1,5 +1,10 @@
 classdef force_sensor < dynamicprops
 
+    % Author(s): Anton Deguet
+    %
+    % Copyright (c) 2019-2021 Johns Hopkins University, University of Washington, Worcester Polytechnic Institute
+    % Released under MIT License
+
     % only this class methods can view/modify
     properties (Access = protected)
         crtk_utils;

@@ -1,5 +1,10 @@
 classdef wait_move_handle
 
+    % Author(s): Anton Deguet
+    %
+    % Copyright (c) 2019-2021 Johns Hopkins University, University of Washington, Worcester Polytechnic Institute
+    % Released under MIT License
+
     properties
         class_instance
         start_time
