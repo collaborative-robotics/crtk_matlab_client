@@ -45,6 +45,8 @@ rosmsg('show', 'crtk_msgs/operating_state')
 m = rosmessage('crtk_msgs/operating_state')
 ```
 
+## Issues
+
 # CMake not found
 
 The build process for the custom messages requires CMake and you might get an error message indicating that CMake is not found.  This might happen even if CMake is running properly in a shell:
@@ -68,3 +70,14 @@ matlab
 ```
 
 Note that you will need to define `LD_PRELOAD` only to generate the messages.  This is not needed afterwards.
+
+## Could not find Python version 2.7
+
+Python default version on Ubuntu 20.04 should be Python 3 but the ROS message generation seems to require Python 2.7.   You can change the default Python for the whole system using:
+```sh
+sudo apt install python-is-python2
+```
+Then start Matlab and generate the messages.  Once you're done generating the custom messages, you might want to quit Matlab and restore Python 3 as your default Python using:
+```
+sudo apt install python-is-python3
+```
