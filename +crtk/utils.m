@@ -266,9 +266,14 @@ classdef utils < handle
             end
         end
 
-        function [busy] = is_busy(self)
-            % last operating state IsBusy
-            busy = self.operating_state_data.IsBusy;
+        function [busy] = is_busy(self, start_time)
+            if nargin == 1
+                start_time = rostime(0.0);
+            end
+            busy = true;
+            if self.operating_state_subscriber.LatestMessage.Header.Stamp > start_time
+                busy = self.operating_state_subscriber.LatestMessage.IsBusy;
+            end
         end
 
         function [result] = wait_for_busy(self, is_busy, start_time)
