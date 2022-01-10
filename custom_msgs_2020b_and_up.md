@@ -38,6 +38,8 @@ addpath('~/catkin_ws/src/dvrk-ros/dvrk_matlab')
 
 Then quit Matlab, restart it and test using:
 ```matlab
+clear classes
+rehash toolboxcache
 which startup
 % show message properties
 rosmsg('show', 'crtk_msgs/operating_state')
