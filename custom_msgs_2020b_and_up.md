@@ -29,7 +29,10 @@ edit(fullfile(userpath,'startup.m'))
 In your `startup.m`, you can add the `addpath` commands that you want executed everytime your start Matlab:
 ```matlab
 % to locate crtk_msgs
+% some Matlab versions use the following path
 addpath('~/catkin_ws/src/crtk/matlab_gen/msggen')
+% more recent versions might be using this instead
+addpath('~/catkin_ws/src/crtk/matlab_msg_gen_ros1/glnxa64/install/m')
 % to locate crtk client
 addpath('~/catkin_ws/src/crtk/crtk_matlab_client')
 % to locate dvrk code - only for dVRK users
@@ -73,7 +76,7 @@ matlab
 
 Note that you will need to define `LD_PRELOAD` only to generate the messages.  This is not needed afterwards.
 
-### Could not find Python version 2.7
+### Could not find Python version 2.7 (2020 versions)
 
 Python default version on Ubuntu 20.04 should be Python 3 but the ROS message generation seems to require Python 2.7.
 
@@ -87,3 +90,18 @@ Two possible fixes:
   ```
   sudo apt install python-is-python3
   ```
+  
+  ### Could not find Python version 3.0 (2022a versions)
+  
+  Add some ubuntu packages using:
+  ```sh
+  sudo apt install python3.9-venv python3.9-full 
+  ```
+  
+  ### venv permissions
+  
+  It seems Matlab fails to create the Python venv in the user home directory.  If it can't find it, it then tries to uses the system directory under `/usr/local/MATLAB`.  You then have to create the venv by hand in the directory Matlab is looking for:
+  ```sh
+  python3.9 -m venv ~/.matlab/R2022a/ros1/glnxa64/venv/
+  ```
+  After that, open Matlab and use the `pyenv` command.
