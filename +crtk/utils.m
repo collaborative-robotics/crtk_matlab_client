@@ -135,7 +135,7 @@ classdef utils < handle
             end
             self.class_instance = class_instance;
             self.ros_namespace = namespace;
-            self.operating_state_data = rosmessage('crtk_msgs/operating_state');
+            self.operating_state_data = rosmessage('crtk_msgs/OperatingState');
             % one time creation of messages to prevent lookup and creation at each call
             self.std_msgs_Bool = rosmessage(rostype.std_msgs_Bool);
             self.std_msgs_StringStamped = rosmessage('crtk_msgs/StringStamped');
@@ -306,7 +306,7 @@ classdef utils < handle
         function add_operating_state(self)
             % operating state subscriber
             self.operating_state_subscriber = ...
-                rossubscriber(self.ros_topic('operating_state'), 'crtk_msgs/operating_state');
+                rossubscriber(self.ros_topic('operating_state'), 'crtk_msgs/OperatingState');
             self.operating_state_subscriber.NewMessageFcn = @self.operating_state_callback;
             self.active_subscribers('operating_state') = self.operating_state_subscriber;
             % accessors
