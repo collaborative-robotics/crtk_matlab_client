@@ -1,4 +1,6 @@
-# Generate custom ROS messages for Matlab version 2020b and up 
+# Generate custom ROS messages for Matlab version 2020b and up
+
+:warning: For Ubuntu 20.04, the default version for Python is 3.8.  Matlab dropped support for Python 3.8 after 2023a so don't use 2023b or higher.
 
 Off the box, Matlab only supports ROS standard messages and can't handle custom messages.  The good news in 2020b is that you don't need an add-on to generate custom ROS messages, `rosgenmsg` is now part of the ROS toolbox.
 
