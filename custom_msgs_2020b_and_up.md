@@ -28,7 +28,10 @@ Instead of setting the path for all users, you can use your startup script.  To 
 ```matlab
 edit(fullfile(userpath,'startup.m'))
 ```
-In your `startup.m`, you can add the `addpath` commands that you want executed everytime your start Matlab:
+In your `startup.m`, you can add the `addpath` commands that you want executed everytime your start Matlab.
+
+:warning: the first path depends on the Matlab version you're using.  On 2023a it should be something like: `~/catkin_ws/src/crtk/matlab_msg_gen_ros1/`:
+
 ```matlab
 % to locate crtk_msgs
 addpath('~/catkin_ws/src/crtk/matlab_gen/msggen')
