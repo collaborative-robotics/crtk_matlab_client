@@ -2,7 +2,7 @@ classdef utils < handle
 
     % Author(s): Anton Deguet
     %
-    % Copyright (c) 2019-2021 Johns Hopkins University, University of Washington, Worcester Polytechnic Institute
+    % Copyright (c) 2019-2022 Johns Hopkins University, University of Washington, Worcester Polytechnic Institute
     % Released under MIT License
 
     % settings that are not supposed to change after constructor
@@ -21,7 +21,7 @@ classdef utils < handle
         std_msgs_Bool;
         std_msgs_StringStamped;
         sensor_msgs_JointState;
-        geometry_msgs_Transform;
+        geometry_msgs_Pose;
         geometry_msgs_Twist;
         geometry_msgs_Wrench;
     end
@@ -88,6 +88,18 @@ classdef utils < handle
                       wrench.Torque.X, wrench.Torque.Y, wrench.Torque.Z];
         end
 
+        function frame_to_ros_pose(frame, pose)
+            % convert 4x4 homogeneous matrix to ROS transform
+            pose.Position.X = frame(1, 4);
+            pose.Position.Y = frame(2, 4);
+            pose.Position.Z = frame(3, 4);
+            quaternion = tform2quat(frame);
+            pose.Orientation.W = quaternion(1);
+            pose.Orientation.X = quaternion(2);
+            pose.Orientation.Y = quaternion(3);
+            pose.Orientation.Z = quaternion(4);
+        end
+
         function frame_to_ros_transform(frame, transform)
             % convert 4x4 homogeneous matrix to ROS transform
             transform.Translation.X = frame(1, 4);
@@ -123,12 +135,12 @@ classdef utils < handle
             end
             self.class_instance = class_instance;
             self.ros_namespace = namespace;
-            self.operating_state_data = rosmessage('crtk_msgs/operating_state');
+            self.operating_state_data = rosmessage('crtk_msgs/OperatingState');
             % one time creation of messages to prevent lookup and creation at each call
             self.std_msgs_Bool = rosmessage(rostype.std_msgs_Bool);
             self.std_msgs_StringStamped = rosmessage('crtk_msgs/StringStamped');
             self.sensor_msgs_JointState = rosmessage(rostype.sensor_msgs_JointState);
-            self.geometry_msgs_Transform = rosmessage(rostype.geometry_msgs_TransformStamped);
+            self.geometry_msgs_Pose = rosmessage(rostype.geometry_msgs_PoseStamped);
             self.geometry_msgs_Twist = rosmessage(rostype.geometry_msgs_TwistStamped);
             self.geometry_msgs_Wrench = rosmessage(rostype.geometry_msgs_WrenchStamped);
         end
@@ -294,7 +306,7 @@ classdef utils < handle
         function add_operating_state(self)
             % operating state subscriber
             self.operating_state_subscriber = ...
-                rossubscriber(self.ros_topic('operating_state'), 'crtk_msgs/operating_state');
+                rossubscriber(self.ros_topic('operating_state'), 'crtk_msgs/OperatingState');
             self.operating_state_subscriber.NewMessageFcn = @self.operating_state_callback;
             self.active_subscribers('operating_state') = self.operating_state_subscriber;
             % accessors
@@ -457,14 +469,14 @@ classdef utils < handle
                 timestamp = 0.0;
                 return;
             end
-            cp = self.ros_transform_to_frame(self.measured_cp_subscriber.LatestMessage.Transform);
+            cp = self.ros_pose_to_frame(self.measured_cp_subscriber.LatestMessage.Pose);
             timestamp = self.ros_time_to_secs(self.measured_cp_subscriber.LatestMessage.Header.Stamp);
         end
 
         function add_measured_cp(self)
             cmd = 'measured_cp';
             self.measured_cp_subscriber = ...
-                rossubscriber(self.ros_topic(cmd), rostype.geometry_msgs_TransformStamped);
+                rossubscriber(self.ros_topic(cmd), rostype.geometry_msgs_PoseStamped);
             self.class_instance.addprop(cmd);
             self.class_instance.measured_cp = @self.measured_cp;
             self.active_subscribers(cmd) = self.measured_cp_subscriber;
@@ -523,14 +535,14 @@ classdef utils < handle
                 timestamp = 0.0;
                 return;
             end
-            cp = self.ros_transform_to_frame(self.setpoint_cp_subscriber.LatestMessage.Transform);
+            cp = self.ros_pose_to_frame(self.setpoint_cp_subscriber.LatestMessage.Pose);
             timestamp = self.ros_time_to_secs(self.setpoint_cp_subscriber.LatestMessage.Header.Stamp);
         end
 
         function add_setpoint_cp(self)
             cmd = 'setpoint_cp';
             self.setpoint_cp_subscriber = ...
-                rossubscriber(self.ros_topic(cmd), rostype.geometry_msgs_TransformStamped);
+                rossubscriber(self.ros_topic(cmd), rostype.geometry_msgs_PoseStamped);
             self.class_instance.addprop(cmd);
             self.class_instance.setpoint_cp = @self.setpoint_cp;
             self.active_subscribers(cmd) = self.setpoint_cp_subscriber;
@@ -582,14 +594,15 @@ classdef utils < handle
 
 
         function servo_cp(self, cp)
-            self.frame_to_ros_transform(cp, self.geometry_msgs_Transform.Transform);
-            send(self.servo_cp_publisher, self.geometry_msgs_Transform);
+            self.check_input_is_frame(cp);
+            self.frame_to_ros_pose(cp, self.geometry_msgs_Pose.Pose);
+            send(self.servo_cp_publisher, self.geometry_msgs_Pose);
         end
 
         function add_servo_cp(self)
             cmd = 'servo_cp';
             self.servo_cp_publisher = ...
-                rospublisher(self.ros_topic(cmd), rostype.geometry_msgs_TransformStamped);
+                rospublisher(self.ros_topic(cmd), rostype.geometry_msgs_PoseStamped);
             self.class_instance.addprop(cmd);
             self.class_instance.servo_cp = @self.servo_cp;
         end
@@ -611,15 +624,15 @@ classdef utils < handle
 
         function [move_handle] = move_cp(self, cp)
             self.check_input_is_frame(cp);
-            self.frame_to_ros_transform(cp, self.geometry_msgs_Transform.Transform);
+            self.frame_to_ros_pose(cp, self.geometry_msgs_Pose.Pose);
             move_handle = crtk.wait_move_handle(self.operating_state_instance);
-            send(self.move_cp_publisher, self.geometry_msgs_Transform);
+            send(self.move_cp_publisher, self.geometry_msgs_Pose);
         end
 
         function add_move_cp(self)
             cmd = 'move_cp';
             self.move_cp_publisher = ...
-                rospublisher(self.ros_topic(cmd), rostype.geometry_msgs_TransformStamped);
+                rospublisher(self.ros_topic(cmd), rostype.geometry_msgs_PoseStamped);
             self.class_instance.addprop(cmd);
             self.class_instance.move_cp = @self.move_cp;
         end
